@@ -1,4 +1,17 @@
+# 依赖与构建产物
 node_modules/
-work/npm-cache/
+dist/
+dist-ssr/
+
+# 环境变量
 .env
-npm-debug.log*
+.env.local
+*.local
+
+# 日志与系统文件
+*.log
+.DS_Store
+Thumbs.db
+
+# AI 会话附件
+.reasonix/
