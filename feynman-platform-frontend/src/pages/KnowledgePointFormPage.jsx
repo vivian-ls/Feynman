@@ -1,8 +1,9 @@
 // src/pages/KnowledgePointFormPage.jsx
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import apiClient from '../api/axios';
 import MarkdownEditor from '../components/MarkdownEditor';
+import VoiceInput from '../components/VoiceInput';
 import getErrorMessage from '../utils/getErrorMessage';
 
 const STATUS_OPTIONS = [
@@ -68,6 +69,13 @@ function KnowledgePointFormPage() {
       cancelled = true;
     };
   }, [id, isEditing]);
+
+  // 语音识别结果追加到内容末尾：保留已有 Markdown，识别文字之后可继续编辑。
+  const handleVoiceTranscribed = useCallback((text) => {
+    const clean = text.trim();
+    if (!clean) return;
+    setContent((prev) => (prev.trim() ? `${prev.replace(/\s+$/, '')}\n\n${clean}` : clean));
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -160,6 +168,7 @@ function KnowledgePointFormPage() {
               </button>
             )}
           </div>
+          <VoiceInput onTranscribed={handleVoiceTranscribed} disabled={saving} />
           <MarkdownEditor value={content} onChange={setContent} minHeight={420} />
         </div>
 

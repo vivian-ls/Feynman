@@ -11,8 +11,9 @@
 - LaTeX 公式渲染（`remark-math` + `rehype-katex`）
 - Mermaid 流程图渲染（`mermaid` + `DOMPurify` 净化 SVG）
 - Markdown 编辑器：工具栏、实时分栏预览、编辑 / 分栏 / 预览三种模式
-- 网页录音（`react-media-recorder`）：开始 / 停止、计时、本地回放
+- 网页录音（`react-media-recorder`）：开始 / 暂停 / 继续 / 停止、计时、本地回放
 - 录音自动转换为 16kHz 单声道 WAV（Web Audio API 重采样），上传后端并调用百度语音识别
+- 新建 / 编辑知识点支持语音输入：识别文字自动追加到 Markdown 内容末尾，可继续编辑
 - 转录成功后自动调用 DeepSeek：展示润色文本、综合评价、优点、待改进与 0-100 分
 - 支持修改转录文字后重新评价；保存复述时一并保存 AI 结果，历史记录显示分数
 - AI 评分低于阈值（默认 60）的知识点会在列表页显示“待复习”徽章与红色卡片
@@ -65,6 +66,7 @@ src/
 │  ├─ ProtectedRoute.jsx     # 路由守卫
 │  ├─ MarkdownRenderer.jsx   # Markdown / GFM / KaTeX / Mermaid 渲染
 │  ├─ MarkdownEditor.jsx     # Markdown 编辑器（工具栏 + 实时预览）
+│  ├─ VoiceInput.jsx         # 语音输入（录音 / 暂停 / 识别）
 │  └─ MermaidBlock.jsx       # Mermaid 图渲染与安全净化
 ├─ context/AuthContext.jsx   # 全局登录状态（token / user / login / logout）
 ├─ pages/
@@ -75,6 +77,7 @@ src/
 │  └─ FeynmanRecordPage.jsx  # 录音、转录、AI 评价、保存复述
 ├─ utils/
 │  ├─ audio.js               # 音频解码、重采样与 WAV 编码
+│  ├─ recorder.js            # 录音状态/错误文案与计时格式化
 │  └─ getErrorMessage.js     # 统一提取后端错误信息
 ├─ App.jsx                   # 路由配置
 └─ main.jsx                  # BrowserRouter + AuthProvider

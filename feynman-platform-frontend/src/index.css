@@ -926,6 +926,10 @@ img {
   color: var(--danger);
 }
 
+.record-status.is-paused {
+  color: var(--warning);
+}
+
 .record-dot {
   width: 8px;
   height: 8px;
@@ -936,6 +940,10 @@ img {
 .record-status.is-recording .record-dot {
   background: var(--danger);
   animation: record-pulse 1.2s ease-in-out infinite;
+}
+
+.record-status.is-paused .record-dot {
+  background: var(--warning);
 }
 
 @keyframes record-pulse {
@@ -973,9 +981,61 @@ img {
   margin-top: 0.75rem;
 }
 
+.record-playback {
+  margin-top: 1rem;
+}
+
+.record-playback-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .record-audio {
   width: 100%;
-  margin-top: 1rem;
+}
+
+/* ---------- 语音输入（新建 / 编辑知识点） ---------- */
+
+.voice-input {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px dashed #c7d7fe;
+  border-radius: var(--radius-sm);
+  background: var(--primary-soft);
+}
+
+.voice-input-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.voice-input-title {
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.voice-input .record-hint {
+  margin: 0;
+}
+
+.voice-input-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.voice-input .form-error,
+.voice-input .form-notice {
+  margin: 0;
 }
 
 .transcript-textarea {

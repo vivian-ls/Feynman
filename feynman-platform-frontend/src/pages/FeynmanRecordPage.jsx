@@ -6,35 +6,11 @@ import apiClient from '../api/axios';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import { blobToWavFile } from '../utils/audio';
 import getErrorMessage from '../utils/getErrorMessage';
-
-const STATUS_TEXT = {
-  idle: '等待开始',
-  acquiring_media: '正在请求麦克风…',
-  recording: '录音中',
-  paused: '已暂停',
-  stopping: '正在停止…',
-  stopped: '录音完成',
-};
-
-const RECORDER_ERROR_TEXT = {
-  permission_denied: '麦克风权限被拒绝。请允许浏览器使用麦克风后重试。',
-  no_specified_media_found: '没有检测到麦克风设备，请连接麦克风后重试。',
-  media_in_use: '麦克风正被其他应用占用，请关闭占用麦克风的应用后重试。',
-  media_aborted: '录音被中断，请重试。',
-  invalid_media_constraints: '当前设备不支持所需的录音参数。',
-  no_constraints: '当前浏览器不支持录音。',
-  recorder_error: '录音器初始化失败，请刷新页面重试。',
-};
-
-function formatDuration(totalSeconds) {
-  const minutes = Math.floor(totalSeconds / 60)
-    .toString()
-    .padStart(2, '0');
-  const seconds = Math.floor(totalSeconds % 60)
-    .toString()
-    .padStart(2, '0');
-  return `${minutes}:${seconds}`;
-}
+import {
+  RECORDER_STATUS_TEXT,
+  formatDuration,
+  getRecorderErrorText,
+} from '../utils/recorder';
 
 function formatTime(value) {
   return new Date(value).toLocaleString('zh-CN', {
@@ -80,24 +56,47 @@ function FeynmanRecordPage() {
 
   const [elapsed, setElapsed] = useState(0);
   const stopHandlerRef = useRef(null);
+  // 暂停会让计时 effect 重启，因此按「录音中」的片段累计时长。
+  const accumulatedMsRef = useRef(0);
+  const runningSinceRef = useRef(null);
 
-  const { status, error, startRecording, stopRecording, mediaBlobUrl, clearBlobUrl } =
-    useReactMediaRecorder({
-      audio: true,
-      onStop: (blobUrl, blob) => {
-        // 通过 ref 调用最新的处理函数，避免闭包拿到旧的 state。
-        stopHandlerRef.current?.(blob);
-      },
-    });
+  const {
+    status,
+    error,
+    startRecording,
+    stopRecording,
+    pauseRecording,
+    resumeRecording,
+    mediaBlobUrl,
+    clearBlobUrl,
+  } = useReactMediaRecorder({
+    audio: true,
+    onStop: (blobUrl, blob) => {
+      // 通过 ref 调用最新的处理函数，避免闭包拿到旧的 state。
+      stopHandlerRef.current?.(blob);
+    },
+  });
 
-  // 录音计时
+  // 录音计时（暂停期间不计时）
   useEffect(() => {
     if (status !== 'recording') return undefined;
-    const startedAt = Date.now();
-    const timer = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startedAt) / 1000));
-    }, 500);
-    return () => clearInterval(timer);
+
+    runningSinceRef.current = Date.now();
+    const tick = () => {
+      const running = runningSinceRef.current ? Date.now() - runningSinceRef.current : 0;
+      setElapsed(Math.floor((accumulatedMsRef.current + running) / 1000));
+    };
+    tick();
+    const timer = setInterval(tick, 500);
+
+    return () => {
+      clearInterval(timer);
+      if (runningSinceRef.current) {
+        accumulatedMsRef.current += Date.now() - runningSinceRef.current;
+        runningSinceRef.current = null;
+      }
+      setElapsed(Math.floor(accumulatedMsRef.current / 1000));
+    };
   }, [status]);
 
   useEffect(() => {
@@ -221,6 +220,8 @@ function FeynmanRecordPage() {
     setSavedTranscript('');
     setSaveMessage('');
     setSaveError('');
+    accumulatedMsRef.current = 0;
+    runningSinceRef.current = null;
     setElapsed(0);
     resetAiState();
     if (mediaBlobUrl) clearBlobUrl();
@@ -234,6 +235,8 @@ function FeynmanRecordPage() {
     setSavedTranscript('');
     setSaveMessage('');
     setSaveError('');
+    accumulatedMsRef.current = 0;
+    runningSinceRef.current = null;
     setElapsed(0);
     resetAiState();
   };
@@ -291,8 +294,9 @@ function FeynmanRecordPage() {
     );
   }
 
-  const recorderErrorText = error ? RECORDER_ERROR_TEXT[error] || `录音出错：${error}` : '';
+  const recorderErrorText = getRecorderErrorText(error);
   const isRecording = status === 'recording';
+  const isPaused = status === 'paused';
   const isBusy = status === 'acquiring_media' || isUploading;
   const canSave = transcript.trim().length > 0 && transcript.trim() !== savedTranscript;
   // 当前输入框里的文字是否正好对应这份 AI 反馈。
@@ -326,47 +330,71 @@ function FeynmanRecordPage() {
           <section className="record-card">
             <div className="record-card-header">
               <h2>录音</h2>
-              <span className={`record-status ${isRecording ? 'is-recording' : ''}`}>
+              <span
+                className={`record-status ${isRecording ? 'is-recording' : ''} ${
+                  isPaused ? 'is-paused' : ''
+                }`.trim()}
+              >
                 <span className="record-dot" />
-                {STATUS_TEXT[status] || status}
-                {isRecording && <strong className="record-timer">{formatDuration(elapsed)}</strong>}
+                {RECORDER_STATUS_TEXT[status] || status}
+                {(isRecording || isPaused) && (
+                  <strong className="record-timer">{formatDuration(elapsed)}</strong>
+                )}
               </span>
             </div>
 
             <p className="record-hint">
-              点击“开始录音”，对着麦克风用自己的话复述上面的知识点，停止后会自动上传识别。
+              点击“开始录音”，对着麦克风用自己的话复述上面的知识点；录音中可以暂停、继续，
+              停止后会自动上传识别，并可以在下方回放录音。
               录音需要浏览器授权麦克风，并且页面运行在 <code>localhost</code> 或 HTTPS 下。
               百度短语音识别单次限制约 60 秒，内容较长时请分段录制。
             </p>
 
-            {(recorderErrorText || error) && (
+            {recorderErrorText && (
               <p className="form-error" role="alert">
-                {recorderErrorText || RECORDER_ERROR_TEXT[error] || '录音出错'}
+                {recorderErrorText}
               </p>
             )}
 
             <div className="record-actions">
-              {isRecording ? (
-                <button type="button" className="btn btn-danger" onClick={stopRecording}>
-                  停止录音
+              {isRecording && (
+                <button type="button" className="btn btn-secondary" onClick={pauseRecording}>
+                  暂停录音
                 </button>
-              ) : (
+              )}
+
+              {isPaused && (
+                <button type="button" className="btn btn-primary" onClick={resumeRecording}>
+                  继续录音
+                </button>
+              )}
+
+              {!isRecording && !isPaused && (
                 <button type="button" className="btn btn-primary" onClick={handleStart} disabled={isBusy}>
                   {status === 'acquiring_media' ? '正在请求麦克风…' : '开始录音'}
                 </button>
               )}
 
-              {mediaBlobUrl && !isRecording && (
+              {(isRecording || isPaused) && (
+                <button type="button" className="btn btn-danger" onClick={stopRecording}>
+                  停止录音
+                </button>
+              )}
+
+              {mediaBlobUrl && !isRecording && !isPaused && (
                 <button type="button" className="link-button" onClick={handleReset}>
                   重新录制
                 </button>
               )}
             </div>
 
-            {mediaBlobUrl && (
-              <audio className="record-audio" src={mediaBlobUrl} controls>
-                你的浏览器不支持音频播放。
-              </audio>
+            {mediaBlobUrl && !isRecording && !isPaused && (
+              <div className="record-playback">
+                <p className="record-playback-label">回放录音</p>
+                <audio className="record-audio" src={mediaBlobUrl} controls>
+                  你的浏览器不支持音频播放。
+                </audio>
+              </div>
             )}
           </section>
 
