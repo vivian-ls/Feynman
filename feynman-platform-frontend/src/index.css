@@ -441,6 +441,34 @@ img {
   border: 1px solid transparent;
 }
 
+/* 需要复习的知识点：淡红背景 + 左侧强调边框，方便一眼识别。 */
+.kp-card.is-review {
+  background: #fffafa;
+  border-color: #fecdca;
+  box-shadow: inset 3px 0 0 var(--danger), var(--shadow);
+}
+
+.review-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid #fecdca;
+}
+
+.review-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+
 .status-todo {
   background: #f2f4f7;
   color: #475467;
@@ -1006,6 +1034,177 @@ img {
   font-size: 0.85rem;
 }
 
+/* ---------- AI 教练反馈 ---------- */
+
+.ai-error-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.ai-feedback {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.ai-feedback-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.ai-block h3 {
+  font-size: 0.92rem;
+  color: var(--muted);
+  margin: 0 0 0.4rem;
+  font-weight: 650;
+}
+
+.ai-polished {
+  background: var(--primary-soft);
+  border: 1px solid #dbe6ff;
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  font-size: 0.95rem;
+}
+
+.ai-polished .markdown-body > *:first-child {
+  margin-top: 0;
+}
+
+.ai-polished .markdown-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.ai-evaluation {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 0.95rem;
+}
+
+.ai-points {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.ai-point-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.ai-point-strengths li::marker {
+  color: var(--success);
+}
+
+.ai-point-weaknesses li::marker {
+  color: var(--warning);
+}
+
+.ai-score {
+  align-self: start;
+  text-align: center;
+  padding: 1rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--static-bg);
+}
+
+.ai-score-label {
+  margin: 0 0 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.ai-score-value {
+  margin: 0;
+  font-size: 2.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-score-value.is-good {
+  color: var(--success);
+}
+
+.ai-score-value.is-ok {
+  color: var(--warning);
+}
+
+.ai-score-value.is-poor {
+  color: var(--danger);
+}
+
+.ai-score-max {
+  margin: 0.15rem 0 0.75rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.ai-review-flag {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.ai-review-flag.is-review {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.attempt-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.attempt-header .attempt-text {
+  margin-bottom: 0;
+}
+
+.attempt-score {
+  flex: none;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--static-bg);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.attempt-score.is-good {
+  color: var(--success);
+  border-color: #abefc6;
+  background: var(--success-soft);
+}
+
+.attempt-score.is-ok {
+  color: var(--warning);
+  border-color: #fedf89;
+  background: var(--warning-soft);
+}
+
+.attempt-score.is-poor {
+  color: var(--danger);
+  border-color: #fecdca;
+  background: var(--danger-soft);
+}
+
 /* ---------- 响应式 ---------- */
 
 @media (max-width: 860px) {
@@ -1022,6 +1221,14 @@ img {
   }
 
   .record-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-feedback {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-points {
     grid-template-columns: 1fr;
   }
 

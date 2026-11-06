@@ -126,11 +126,43 @@ router.post('/:id/attempts', auth, async (req, res) => {
             return res.status(400).json({ msg: 'transcript is required' });
         }
 
-        const attempt = await new FeynmanAttempt({
+        const attemptData = {
             user: req.user.id,
             knowledgePoint: kp._id,
             transcript,
-        }).save();
+        };
+
+        // AI 评价结果是可选的：前端做完整评价后会一并带上，便于历史记录回看。
+        if (typeof req.body.polishedText === 'string' && req.body.polishedText.trim()) {
+            attemptData.polishedText = req.body.polishedText.trim();
+        }
+        if (typeof req.body.evaluation === 'string' && req.body.evaluation.trim()) {
+            attemptData.evaluation = req.body.evaluation.trim();
+        }
+
+        const toStringList = (value) =>
+            Array.isArray(value)
+                ? value
+                      .filter((item) => typeof item === 'string' && item.trim())
+                      .map((item) => item.trim())
+                      .slice(0, 5)
+                : [];
+
+        const strengths = toStringList(req.body.strengths);
+        if (strengths.length) attemptData.strengths = strengths;
+
+        const weaknesses = toStringList(req.body.weaknesses);
+        if (weaknesses.length) attemptData.weaknesses = weaknesses;
+
+        const score = Number(req.body.score);
+        if (req.body.score !== undefined && req.body.score !== null) {
+            if (!Number.isFinite(score) || score < 0 || score > 100) {
+                return res.status(400).json({ msg: 'score must be a number between 0 and 100' });
+            }
+            attemptData.score = Math.round(score);
+        }
+
+        const attempt = await new FeynmanAttempt(attemptData).save();
 
         res.status(201).json(attempt);
     } catch (err) {

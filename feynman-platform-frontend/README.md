@@ -1,6 +1,6 @@
 # 费曼学习平台 · 前端
 
-《大前端与 AI 实战》课程的 React 前端项目。配合 `feynman-platform-backend` 完成后端 API 联调，实现用户认证、知识点管理、网页录音与 AI 语音转文字。
+《大前端与 AI 实战》课程的 React 前端项目。配合 `feynman-platform-backend` 完成后端 API 联调，实现用户认证、知识点管理、网页录音、AI 语音转文字，以及基于 DeepSeek 的复述润色与智能评分。
 
 ## 已实现功能
 
@@ -13,7 +13,9 @@
 - Markdown 编辑器：工具栏、实时分栏预览、编辑 / 分栏 / 预览三种模式
 - 网页录音（`react-media-recorder`）：开始 / 停止、计时、本地回放
 - 录音自动转换为 16kHz 单声道 WAV（Web Audio API 重采样），上传后端并调用百度语音识别
-- 转录结果可编辑、保存为复述记录，并展示历史复述
+- 转录成功后自动调用 DeepSeek：展示润色文本、综合评价、优点、待改进与 0-100 分
+- 支持修改转录文字后重新评价；保存复述时一并保存 AI 结果，历史记录显示分数
+- AI 评分低于阈值（默认 60）的知识点会在列表页显示“待复习”徽章与红色卡片
 - token 失效（HTTP 401）自动清理登录状态并回到登录页
 
 ## 运行方式
@@ -68,9 +70,9 @@ src/
 ├─ pages/
 │  ├─ LoginPage.jsx
 │  ├─ RegisterPage.jsx
-│  ├─ DashboardPage.jsx      # 知识点列表
+│  ├─ DashboardPage.jsx      # 知识点列表（含“待复习”标记）
 │  ├─ KnowledgePointFormPage.jsx
-│  └─ FeynmanRecordPage.jsx  # 录音、转录、保存复述
+│  └─ FeynmanRecordPage.jsx  # 录音、转录、AI 评价、保存复述
 ├─ utils/
 │  ├─ audio.js               # 音频解码、重采样与 WAV 编码
 │  └─ getErrorMessage.js     # 统一提取后端错误信息
@@ -86,3 +88,6 @@ src/
 - 浏览器录音通常是 48kHz 的 WAV/WebM，百度短语音识别要求 16kHz WAV，因此 `utils/audio.js` 会先解码音频，用 `OfflineAudioContext` 重采样为 16kHz 单声道，再编码成 16-bit PCM WAV 上传。
 - 上传音频时必须显式设置 `Content-Type: multipart/form-data`（axios 实例默认是 JSON），否则后端 multer 收不到文件。
 - 百度语音识别凭证配置在后端 `.env`。未配置时接口返回 `503`，页面会提示先完成配置。
+- AI 润色与评分由后端 `/api/ai/evaluate` 调用 DeepSeek 完成，`DEEPSEEK_API_KEY` 同样配置在后端 `.env`；未配置时页面会提示先完成配置。
+- 转录成功会自动触发 AI 评价；修改文本框内容后会出现“重新评价”按钮，并且只有评价对应的文字与当前文字一致时，保存复述才会带上 AI 结果。
+- 评分低于 `AI_REVIEW_THRESHOLD`（默认 60）时，后端把知识点的 `reviewList` 置为 `true`，列表页显示“待复习”徽章；达到阈值后自动移出复习列表。

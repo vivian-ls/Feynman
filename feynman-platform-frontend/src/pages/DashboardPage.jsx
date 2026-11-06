@@ -106,10 +106,15 @@ function DashboardPage() {
           {knowledgePoints.map((kp) => {
             const status = STATUS_META[kp.status] || STATUS_META.not_started;
             return (
-              <article className="kp-card" key={kp._id}>
+              <article className={`kp-card ${kp.reviewList ? 'is-review' : ''}`} key={kp._id}>
                 <header className="kp-card-header">
                   <div className="kp-title-row">
                     <h2>{kp.title}</h2>
+                    {kp.reviewList && (
+                      <span className="review-badge" title="最近一次 AI 评分低于阈值">
+                        待复习
+                      </span>
+                    )}
                     <span className={`status-badge ${status.className}`}>{status.label}</span>
                   </div>
                   <p className="kp-meta">更新于 {formatDate(kp.updatedAt || kp.createdAt)}</p>

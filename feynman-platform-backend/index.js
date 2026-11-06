@@ -25,6 +25,7 @@ app.use(express.json());
 app.use('/api/users', require('./routes/users'));
 app.use('/api/knowledge-points', require('./routes/knowledgePoints')); // 新增
 app.use('/api/audio', require('./routes/audio')); // 录音上传与语音识别
+app.use('/api/ai', require('./routes/ai')); // DeepSeek 文本润色与智能评价
 
 // --- 数据库连接 ---
 mongoose.connect(process.env.MONGO_URI)

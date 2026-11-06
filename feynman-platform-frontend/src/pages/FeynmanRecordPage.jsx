@@ -45,6 +45,14 @@ function formatTime(value) {
   });
 }
 
+// 分数配色：80 分以上绿色，60 分以上橙色，其余红色。
+function getScoreTone(score) {
+  if (typeof score !== 'number') return '';
+  if (score >= 80) return 'is-good';
+  if (score >= 60) return 'is-ok';
+  return 'is-poor';
+}
+
 function FeynmanRecordPage() {
   const { id } = useParams();
 
@@ -55,6 +63,12 @@ function FeynmanRecordPage() {
   const [transcript, setTranscript] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+
+  const [aiFeedback, setAiFeedback] = useState(null);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [aiError, setAiError] = useState('');
+  // 用递增序号丢弃过期请求：重新录音/重新评价时，旧响应不再覆盖新结果。
+  const evaluationSeqRef = useRef(0);
 
   const [attempts, setAttempts] = useState([]);
   const [attemptsError, setAttemptsError] = useState('');
@@ -117,6 +131,37 @@ function FeynmanRecordPage() {
     loadAttempts();
   }, [loadAttempts]);
 
+  // 把转录文本交给 DeepSeek：润色 + 评价 + 打分。
+  // 后端会根据分数自动维护知识点的 reviewList（低于阈值加入复习列表）。
+  const evaluateTranscript = useCallback(
+    async (text) => {
+      const content = typeof text === 'string' ? text.trim() : '';
+      if (!content) return;
+
+      const seq = ++evaluationSeqRef.current;
+      setIsEvaluating(true);
+      setAiError('');
+      setAiFeedback(null);
+
+      try {
+        const response = await apiClient.post('/ai/evaluate', {
+          originalContent: knowledgePoint?.content || '',
+          transcribedText: content,
+          knowledgePointId: id,
+        });
+        if (evaluationSeqRef.current !== seq) return;
+        // sourceText 用来判断评价是否还对应输入框里的最新文字。
+        setAiFeedback({ ...response.data, sourceText: content });
+      } catch (err) {
+        if (evaluationSeqRef.current !== seq) return;
+        setAiError(getErrorMessage(err, 'AI 评价失败，请稍后重试'));
+      } finally {
+        if (evaluationSeqRef.current === seq) setIsEvaluating(false);
+      }
+    },
+    [id, knowledgePoint],
+  );
+
   // 停止录音后：转换为 16kHz WAV，上传到后端转录。
   const uploadRecording = useCallback(
     async (blob) => {
@@ -127,6 +172,8 @@ function FeynmanRecordPage() {
       setSavedTranscript('');
       setSaveMessage('');
       setSaveError('');
+      setAiFeedback(null);
+      setAiError('');
 
       try {
         const wavFile = await blobToWavFile(blob, `feynman-${id}.wav`);
@@ -138,8 +185,12 @@ function FeynmanRecordPage() {
           // 浏览器会自动补上 boundary。
           headers: { 'Content-Type': 'multipart/form-data' },
         });
-        setTranscript(response.data.result || '');
-        if (!response.data.result) {
+        const result = response.data.result || '';
+        setTranscript(result);
+        if (result) {
+          // 转录成功后自动让 AI 教练批阅。
+          evaluateTranscript(result);
+        } else {
           setUploadError('识别结果为空，请再录一次或手动输入文字。');
         }
       } catch (err) {
@@ -148,13 +199,21 @@ function FeynmanRecordPage() {
         setIsUploading(false);
       }
     },
-    [id],
+    [evaluateTranscript, id],
   );
 
   // 保存最新的上传处理函数，供录音结束回调使用（避免渲染期间写 ref）
   useEffect(() => {
     stopHandlerRef.current = uploadRecording;
   }, [uploadRecording]);
+
+  const resetAiState = () => {
+    // 让进行中的评价请求失效，避免旧结果写回页面。
+    evaluationSeqRef.current += 1;
+    setAiFeedback(null);
+    setAiError('');
+    setIsEvaluating(false);
+  };
 
   const handleStart = () => {
     setTranscript('');
@@ -163,6 +222,7 @@ function FeynmanRecordPage() {
     setSaveMessage('');
     setSaveError('');
     setElapsed(0);
+    resetAiState();
     if (mediaBlobUrl) clearBlobUrl();
     startRecording();
   };
@@ -175,6 +235,7 @@ function FeynmanRecordPage() {
     setSaveMessage('');
     setSaveError('');
     setElapsed(0);
+    resetAiState();
   };
 
   const handleSave = async () => {
@@ -185,7 +246,21 @@ function FeynmanRecordPage() {
     setSaveError('');
     setSaveMessage('');
     try {
-      await apiClient.post(`/knowledge-points/${id}/attempts`, { transcript: text });
+      // 只有评价对应的仍是当前文本时，才一并保存 AI 结果，
+      // 避免用户改过转录后把旧评价写进历史记录。
+      const feedback = aiFeedback?.sourceText === text ? aiFeedback : null;
+      const payload = { transcript: text };
+      if (feedback) {
+        Object.assign(payload, {
+          polishedText: feedback.polishedText,
+          evaluation: feedback.evaluation,
+          strengths: feedback.strengths,
+          weaknesses: feedback.weaknesses,
+          score: feedback.score,
+        });
+      }
+
+      await apiClient.post(`/knowledge-points/${id}/attempts`, payload);
       setSavedTranscript(text);
       setSaveMessage('复述已保存到复述记录。');
       await loadAttempts();
@@ -220,6 +295,10 @@ function FeynmanRecordPage() {
   const isRecording = status === 'recording';
   const isBusy = status === 'acquiring_media' || isUploading;
   const canSave = transcript.trim().length > 0 && transcript.trim() !== savedTranscript;
+  // 当前输入框里的文字是否正好对应这份 AI 反馈。
+  const hasCurrentFeedback = Boolean(
+    aiFeedback && aiFeedback.sourceText === transcript.trim(),
+  );
 
   return (
     <>
@@ -336,6 +415,124 @@ function FeynmanRecordPage() {
               </p>
             )}
           </section>
+
+          <section className="record-card">
+            <div className="record-card-header">
+              <h2>AI 教练反馈</h2>
+              {isEvaluating && <span className="record-status">正在批阅…</span>}
+              {!isEvaluating && transcript.trim() && !hasCurrentFeedback && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => evaluateTranscript(transcript)}
+                >
+                  {aiFeedback ? '重新评价' : 'AI 评价'}
+                </button>
+              )}
+            </div>
+
+            {isEvaluating && (
+              <p className="record-hint">AI 教练正在批阅你的复述，通常需要几秒钟…</p>
+            )}
+
+            {aiError && (
+              <div className="ai-error-row">
+                <p className="form-error" role="alert">
+                  {aiError}
+                </p>
+                {transcript.trim() && (
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => evaluateTranscript(transcript)}
+                  >
+                    重试
+                  </button>
+                )}
+              </div>
+            )}
+
+            {!isEvaluating && !aiError && !aiFeedback && (
+              <p className="muted">
+                录音转录完成后会自动请求 AI 评价；你也可以手动输入文字后点击“AI 评价”。
+              </p>
+            )}
+
+            {aiFeedback && !hasCurrentFeedback && (
+              <p className="form-notice">
+                转录文字已修改，下面的反馈对应修改前的内容。点击“重新评价”可获取新反馈。
+              </p>
+            )}
+
+            {aiFeedback && (
+              <div className="ai-feedback">
+                <div className="ai-feedback-main">
+                  <section className="ai-block">
+                    <h3>润色后的文本</h3>
+                    {aiFeedback.polishedText ? (
+                      <div className="ai-polished">
+                        <MarkdownRenderer>{aiFeedback.polishedText}</MarkdownRenderer>
+                      </div>
+                    ) : (
+                      <p className="muted">AI 未返回润色文本。</p>
+                    )}
+                  </section>
+
+                  <section className="ai-block">
+                    <h3>综合评价</h3>
+                    <p className="ai-evaluation">
+                      {aiFeedback.evaluation || 'AI 未返回综合评价。'}
+                    </p>
+                  </section>
+
+                  <div className="ai-points">
+                    <section className="ai-block">
+                      <h3>优点</h3>
+                      {aiFeedback.strengths?.length ? (
+                        <ul className="ai-point-list ai-point-strengths">
+                          {aiFeedback.strengths.map((item, index) => (
+                            <li key={index}>{item}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="muted">暂无</p>
+                      )}
+                    </section>
+
+                    <section className="ai-block">
+                      <h3>待改进</h3>
+                      {aiFeedback.weaknesses?.length ? (
+                        <ul className="ai-point-list ai-point-weaknesses">
+                          {aiFeedback.weaknesses.map((item, index) => (
+                            <li key={index}>{item}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="muted">暂无</p>
+                      )}
+                    </section>
+                  </div>
+                </div>
+
+                <aside className="ai-score">
+                  <p className="ai-score-label">综合得分</p>
+                  <p className={`ai-score-value ${getScoreTone(aiFeedback.score)}`}>
+                    {aiFeedback.score}
+                  </p>
+                  <p className="ai-score-max">满分 100</p>
+                  {aiFeedback.reviewList !== null && aiFeedback.reviewList !== undefined && (
+                    <p
+                      className={`ai-review-flag ${aiFeedback.reviewList ? 'is-review' : ''}`}
+                    >
+                      {aiFeedback.reviewList
+                        ? `低于 ${aiFeedback.reviewThreshold} 分，已加入复习列表`
+                        : '已达标，移出复习列表'}
+                    </p>
+                  )}
+                </aside>
+              </div>
+            )}
+          </section>
         </div>
 
         <aside className="record-side">
@@ -359,7 +556,17 @@ function FeynmanRecordPage() {
               <ul className="attempt-list">
                 {attempts.map((attempt) => (
                   <li className="attempt-item" key={attempt._id}>
-                    <p className="attempt-text">{attempt.transcript}</p>
+                    <div className="attempt-header">
+                      <p className="attempt-text">{attempt.transcript}</p>
+                      {typeof attempt.score === 'number' && (
+                        <span
+                          className={`attempt-score ${getScoreTone(attempt.score)}`}
+                          title="AI 综合得分"
+                        >
+                          {attempt.score} 分
+                        </span>
+                      )}
+                    </div>
                     <p className="attempt-time">{formatTime(attempt.createdAt)}</p>
                   </li>
                 ))}
